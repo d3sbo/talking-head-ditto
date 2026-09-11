@@ -1,0 +1,745 @@
+[
+    {
+        "id": "ea443c141c5db8d1",
+        "type": "tab",
+        "label": "Talking Head Video",
+        "disabled": false,
+        "info": "Generates a Ditto TRT talking head video of the daily summary. Notifications are handled by the Python server on the GPU host."
+    },
+    {
+        "id": "c666cb52e47af260",
+        "type": "server-events",
+        "z": "ea443c141c5db8d1",
+        "name": "HA: generate_talking_head_video",
+        "server": "2f3e415f.67836e",
+        "version": 3,
+        "exposeAsEntityConfig": "",
+        "eventType": "generate_talking_head_video",
+        "eventData": "",
+        "waitForRunning": true,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            },
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "str"
+            }
+        ],
+        "x": 280,
+        "y": 240,
+        "wires": [
+            [
+                "585b9bbb799bdeb9"
+            ]
+        ]
+    },
+    {
+        "id": "5f0e6685ecadcd90",
+        "type": "inject",
+        "z": "ea443c141c5db8d1",
+        "name": "Manual Test Trigger",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 320,
+        "y": 360,
+        "wires": [
+            [
+                "585b9bbb799bdeb9"
+            ]
+        ]
+    },
+    {
+        "id": "585b9bbb799bdeb9",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Get Daily Summary",
+        "func": "var summary = global.get('daily_summary_full') || '';\nif (!summary || summary.trim() === '') {\n    node.warn('No daily summary found in global.daily_summary_full');\n    msg.payload = { error: 'No daily summary available. Run the daily summary first.' };\n    return [msg, null];\n}\n\n// Get header from global, reject if it contains undefined\nvar summaryHeader = global.get(\"daily_summary_header\") || null;\nif (summaryHeader && summaryHeader.indexOf(\"undefined\") >= 0) {\n    summaryHeader = null;\n}\n\n// Fallback if no valid header\nif (!summaryHeader) {\n    summaryHeader = \"Summary from midnight to \" +\n        new Date().toLocaleString(\"en-GB\", { timeZone: \"Europe/London\", hour: \"2-digit\", minute: \"2-digit\", hour12: false }) +\n        \" - \" +\n        new Date().toLocaleDateString(\"en-GB\", { timeZone: \"Europe/London\", year: \"numeric\", month: \"2-digit\", day: \"2-digit\" }).split(\"/\").reverse().join(\"-\");\n}\n\nnode.warn('Daily summary retrieved: ' + summary.length + ' chars');\nnode.warn('summaryHeader: ' + summaryHeader);\n\n// ── Strip markdown formatting ──\nvar clean = summary\n    .replace(/^#{1,6}\\s+/gm, \"\")\n    .replace(/\\*\\*(.+?)\\*\\*/g, \"$1\")\n    .replace(/\\*(.+?)\\*/g, \"$1\")\n    .replace(/^[-*+]\\s+/gm, \"\")\n    .replace(/^\\d+\\.\\s+/gm, \"\")\n    .replace(/`(.+?)`/g, \"$1\")\n    .replace(/^---+$/gm, \"\")\n    .replace(/\\n{3,}/g, \"\\n\\n\")\n    .trim();\n\n// ── Remove standalone section headings entirely ──\nclean = clean.replace(/^(Weather|Energy & Car|Energy and Car|Camera Activity|Daily Activity|Tasks, Shopping & Calendar|Tasks, Shopping and Calendar)\\s*$/gm, \"\");\n\n// ── Clean up empty lines left by heading removal ──\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\n\n// ── Date format: 2026-05-17 → 17 May 2026 (MUST run before decimal fix) ──\nclean = clean.replace(/(\\d{4})-(\\d{2})-(\\d{2})/g, function (match, year, month, day) {\n    var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n    return parseInt(day) + \" \" + months[parseInt(month) - 1] + \" \" + year;\n});\n\n// ── Unit & abbreviation replacements ──\nclean = clean.replace(/ETFE/g, \"Ethylene Tetrafluoroethylene\");\nclean = clean.replace(/μSv\\/h/g, \"micro-Sieverts per hour\");\nclean = clean.replace(/&/g, \"and\");\nclean = clean.replace(/°C/g, \" degrees Celsius\");\nclean = clean.replace(/°F/g, \" degrees Fahrenheit\");\nclean = clean.replace(/°/g, \" degrees \");\nclean = clean.replace(/μ/g, \"micro\");\nclean = clean.replace(/kWh/g, \"kilowatt hours\");\nclean = clean.replace(/hPa/g, \"hectopascals\");\nclean = clean.replace(/km\\/h/g, \"kilometres per hour\");\nclean = clean.replace(/\\bmm\\b/g, \" millimetres\");\nclean = clean.replace(/%/g, \" percent\");\nclean = clean.replace(/UV Index/gi, \"you vee index\");\nclean = clean.replace(/🌤️|🌧️|☀️|🌩️/g, \"\");\nclean = clean.replace(/\\bPIR\\b/g, \"motion sensor\");\nclean = clean.replace(/AdBlue/g, \"add blue\");\nclean = clean.replace(/\\bIR\\b/gi, \"infrared\");\nclean = clean.replace(/\\bpoe\\b/gi, \"Power over Ethernet\");\nclean = clean.replace(/ppm/g, \"parts per million\");\nclean = clean.replace(/\\bCO2\\b/g, \"see oh two\");\nclean = clean.replace(/\\bAQI\\b/gi, \"air quality index\");\nclean = clean.replace(/\\bIPTV\\b/gi, \"eye pee tee vee\");\nclean = clean.replace(/\\bLED\\b/g, \"el ee dee\");\nclean = clean.replace(/\\bAC\\b/g, \"air conditioning\");\nclean = clean.replace(/\\bLeakBot\\b/gi, \"Leak Bot\");\nclean = clean.replace(/\\bWago\\b/gi, \"Way-go\");\nclean = clean.replace(/\\bAliExpress\\b/gi, \"Ali Express\");\n\n// \"Todo\"/\"To-do\" gets read as a single odd word — say it as two\nclean = clean.replace(/\\bto-?do(s?)\\b/gi, function (m, s) {\n    return (m[0] === m[0].toUpperCase() ? \"To do\" : \"to do\") + s;\n});\n\n// ── Replace any remaining slashes ──\nclean = clean.replace(/\\//g, \" and \");\n\n// ── Remove parentheses ──\nclean = clean.replace(/[()]/g, \"\");\n\n// ── Fix times in body text: 17:12 → 5 12 in the afternoon ──\nclean = clean.replace(/\\b(\\d{1,2}):(\\d{2})\\b/g, function (match, h, m) {\n    var hour = parseInt(h);\n    var min = parseInt(m);\n    var period;\n    if (hour >= 5 && hour < 12) period = \"in the morning\";\n    else if (hour >= 12 && hour < 17) period = \"in the afternoon\";\n    else if (hour >= 17 && hour < 21) period = \"in the evening\";\n    else period = \"at night\";\n    if (hour > 12) hour -= 12;\n    if (hour === 0) hour = 12;\n    if (min === 0) return hour + \" \" + period;\n    if (min < 10) return hour + \" oh \" + min + \" \" + period;\n    return hour + \" \" + min + \" \" + period;\n});\n\n// ── Strip trailing .0 from whole numbers: 10.0 → 10 ──\nclean = clean.replace(/\\b(\\d+)\\.0\\b/g, \"$1\");\n\n// ── Convert large minute values to days/hours ──\nclean = clean.replace(/(\\d+)\\s*minutes/g, function (match, num) {\n    var m = parseInt(num);\n    if (m < 120) return match;\n    var days = Math.floor(m / 1440);\n    var hours = Math.floor((m % 1440) / 60);\n    if (days > 0 && hours > 0) return days + \" days and \" + hours + \" hours\";\n    if (days > 0) return days + \" days\";\n    return hours + \" hours\";\n});\n\n// ── Spell out 4+ digit numbers: 1007 → one thousand and seven ──\n// Skip years after month names (e.g. \"May 2026\" stays as-is)\nclean = clean.replace(/\\b(\\d{4,})\\b/g, function (match, num, offset, str) {\n    var before = str.substring(Math.max(0, offset - 12), offset);\n    var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n    if (months.some(function (m) { return before.trimEnd().endsWith(m); })) {\n        return match;\n    }\n    var n = parseInt(num);\n    var thousands = Math.floor(n / 1000);\n    var remainder = n % 1000;\n    if (remainder === 0) return thousands + \" thousand\";\n    if (remainder < 100) return thousands + \" thousand and \" + remainder;\n    return thousands + \" thousand \" + remainder;\n});\n\n// ── Processor/hardware names (AFTER number formatter) ──\nclean = clean.replace(/i9-9900K/g, \"i 9 9900 K\");\nclean = clean.replace(/Ryzen 5950X/g, \"Ryzen 5950 X\");\nclean = clean.replace(/Ultra5/g, \"Ultra 5\");\n\n// ── Fix decimal numbers for TTS: 9.58 → 9 point 58 ──\nclean = clean.replace(/(\\d+)\\.(\\d+)/g, \"$1 point $2\");\n\n// ── Duration abbreviations ──\nclean = clean.replace(/(\\d+)h\\s*(\\d+)m/g, \"$1 hours $2 minutes\");\nclean = clean.replace(/(\\d+)h\\b/g, \"$1 hours\");\nclean = clean.replace(/(\\d+)m\\b/g, \"$1 minutes\");\n\n// ── Fix singular minute/hour ──\nclean = clean.replace(/\\b1 minutes\\b/g, \"1 minute\");\nclean = clean.replace(/\\b1 hours\\b/g, \"1 hour\");\n\n// ── Em-dash → comma pause ──\nclean = clean.replace(/—/g, \", \");\n\n// ─────────────────────────────────────────────────────────────────\n// NOTE: the period-stripping and short-line merge that used to live\n// here were XTTS-specific and have moved to \"Format for XTTS\", after\n// the engine switch. This node now emits properly punctuated prose;\n// each engine's node degrades it as that engine requires.\n// ─────────────────────────────────────────────────────────────────\n\n// ── Collapse spaces but KEEP newlines for downstream sentence handling ──\nclean = clean.replace(/[^\\S\\n]+/g, \" \");\nclean = clean.replace(/\\n\\s*/g, \"\\n\");\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\nclean = clean.trim();\n\n// ── Prepend header for TTS ──\nif (summaryHeader) {\n    summaryHeader = summaryHeader.replace(/(\\d{2}):(\\d{2})/g, function (match, h, m) {\n        var hour = parseInt(h);\n        var min = parseInt(m);\n        if (min === 0) return hour + \" o'clock\";\n        if (min < 10) return hour + \" oh \" + min;\n        return hour + \" \" + min;\n    });\n\n    summaryHeader = summaryHeader.replace(/(\\d{4})-(\\d{2})-(\\d{2})/g, function (match, year, month, day) {\n        var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n        return parseInt(day) + \" \" + months[parseInt(month) - 1] + \" \" + year;\n    });\n    summaryHeader = summaryHeader.replace(\" - \", \", \");\n    clean = summaryHeader + \"\\n\" + clean;\n}\n\nmsg.summary_text = clean;\nmsg.payload = { summary_text: clean };\nreturn [null, msg];\n",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 550,
+        "y": 300,
+        "wires": [
+            [
+                "0df8953ca6950808"
+            ],
+            [
+                "b433360d90050b25"
+            ]
+        ]
+    },
+    {
+        "id": "0df8953ca6950808",
+        "type": "debug",
+        "z": "ea443c141c5db8d1",
+        "name": "No Summary Error",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 780,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "b433360d90050b25",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Start Containers",
+        "func": "var ttsEngine = global.get('homeassistant.homeAssistant.states[\"input_select.tts_engine\"].state') || \"XTTS v2\";\nvar endpoint = ttsEngine === \"Voicebox\" ? \"/start-ditto-voicebox\" : \"/start-ditto\";\nmsg.url = env.get(\"DOCKER_DESKTOP\") + endpoint;\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.requestTimeout = 240000;\nmsg.dittoRetries = 0;\nnode.warn(\"Starting containers via DockerControl (\" + ttsEngine + \")...\");\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 780,
+        "y": 360,
+        "wires": [
+            [
+                "6352fe963b83c6e0"
+            ]
+        ]
+    },
+    {
+        "id": "6352fe963b83c6e0",
+        "type": "http request",
+        "z": "ea443c141c5db8d1",
+        "name": "DockerControl Start",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 1000,
+        "y": 360,
+        "wires": [
+            [
+                "c364d20e52225ddb"
+            ]
+        ]
+    },
+    {
+        "id": "c364d20e52225ddb",
+        "type": "delay",
+        "z": "ea443c141c5db8d1",
+        "name": "Wait 30s",
+        "pauseType": "delay",
+        "timeout": "30",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1200,
+        "y": 360,
+        "wires": [
+            [
+                "d789dc423a1c378b"
+            ]
+        ]
+    },
+    {
+        "id": "d789dc423a1c378b",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Check Ditto Health",
+        "func": "msg.url = \"http://192.168.1.20:5050/health\";\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.requestTimeout = 5000;\nnode.warn(\"Checking Ditto health (attempt \" + ((msg.dittoRetries || 0) + 1) + \")...\");\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 460,
+        "wires": [
+            [
+                "90cf680edf24b132"
+            ]
+        ]
+    },
+    {
+        "id": "90cf680edf24b132",
+        "type": "http request",
+        "z": "ea443c141c5db8d1",
+        "name": "Ditto Health HTTP",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 690,
+        "y": 460,
+        "wires": [
+            [
+                "026890dd2bdefb35"
+            ]
+        ]
+    },
+    {
+        "id": "026890dd2bdefb35",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Health Check Result",
+        "func": "if (msg.statusCode === 200) {\n    node.warn(\"Ditto is ready!\");\n    return [msg, null];\n}\nmsg.dittoRetries = (msg.dittoRetries || 0) + 1;\nif (msg.dittoRetries >= 36) {\n    node.warn(\"Ditto failed to start after 36 attempts — trying anyway\");\n    return [msg, null];\n}\nnode.warn(\"Ditto not ready yet, retry \" + msg.dittoRetries + \"/36...\");\nreturn [null, msg];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 940,
+        "y": 460,
+        "wires": [
+            [
+                "3f7c1a9b2e4d5061"
+            ],
+            [
+                "927ad87541e9285d"
+            ]
+        ]
+    },
+    {
+        "id": "927ad87541e9285d",
+        "type": "delay",
+        "z": "ea443c141c5db8d1",
+        "name": "Wait 5s",
+        "pauseType": "delay",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 200,
+        "y": 460,
+        "wires": [
+            [
+                "d789dc423a1c378b"
+            ]
+        ]
+    },
+    {
+        "id": "0166bda06a794a1f",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Prepare Generate Request",
+        "func": "// Get TTS engine preference from HA\nvar ttsEngine = global.get('homeassistant.homeAssistant.states[\"input_select.tts_engine\"].state') || \"XTTS v2\";\n\nmsg.url = 'http://192.168.1.20:5050/generate';\nmsg.method = 'POST';\nmsg.headers = { 'Content-Type': 'application/json' };\nmsg.payload = { \n    summary_text: msg.summary_text,\n    tts_engine: ttsEngine,\n    tempo: 0.80\n};\nmsg.requestTimeout = 600000;\nnode.warn('Calling Ditto TRT server (TTS: ' + ttsEngine + ')...');\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1470,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7245116fde15422f",
+        "type": "http request",
+        "z": "ea443c141c5db8d1",
+        "name": "POST /generate",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 2000,
+        "y": 460,
+        "wires": [
+            [
+                "fdc6609b82769d24"
+            ]
+        ]
+    },
+    {
+        "id": "fdc6609b82769d24",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Handle Response",
+        "func": "var resp = msg.payload || {};\nif (resp.status === 'success') {\n    node.warn('✅ Talking head video generated: ' + resp.video_url);\n    msg.payload = {\n        success: true,\n        filename: resp.filename,\n        video_url: resp.video_url\n    };\n    return [msg, null];\n} else {\n    node.warn('❌ Generation failed - stopping containers: ' + JSON.stringify(resp));\n    msg.payload = {\n        success: false,\n        error: resp.error || 'Unknown error'\n    };\n    return [msg, msg];\n}",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2250,
+        "y": 460,
+        "wires": [
+            [
+                "687cb8f151ce5d17"
+            ],
+            [
+                "687cb8f151ce5d17",
+                "4b5032dba78c5ac7"
+            ]
+        ]
+    },
+    {
+        "id": "687cb8f151ce5d17",
+        "type": "debug",
+        "z": "ea443c141c5db8d1",
+        "name": "Result",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.success",
+        "statusType": "auto",
+        "x": 2550,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "3eebed27c73269d5",
+        "type": "server-events",
+        "z": "ea443c141c5db8d1",
+        "name": "HA: talking_head_complete",
+        "server": "2f3e415f.67836e",
+        "version": 3,
+        "exposeAsEntityConfig": "",
+        "eventType": "talking_head_complete",
+        "eventData": "",
+        "waitForRunning": true,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            },
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "$outputData(\"eventData\").event_type",
+                "valueType": "jsonata"
+            }
+        ],
+        "x": 260,
+        "y": 760,
+        "wires": [
+            [
+                "4b5032dba78c5ac7"
+            ]
+        ]
+    },
+    {
+        "id": "4b5032dba78c5ac7",
+        "type": "delay",
+        "z": "ea443c141c5db8d1",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "10",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 480,
+        "y": 760,
+        "wires": [
+            [
+                "089263efebf29dca"
+            ]
+        ]
+    },
+    {
+        "id": "089263efebf29dca",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Stop Containers",
+        "func": "var ttsEngine = global.get('homeassistant.homeAssistant.states[\"input_select.tts_engine\"].state') || \"XTTS v2\";\nvar endpoint = ttsEngine === \"Voicebox\" ? \"/stop-ditto-voicebox\" : \"/stop-ditto\";\nmsg.url = env.get(\"DOCKER_DESKTOP\") + endpoint;\nmsg.method = \"GET\";\nmsg.headers = {};\nnode.warn(\"Stopping containers via DockerControl (\" + ttsEngine + \")...\");\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 760,
+        "wires": [
+            [
+                "6a19c2ebfa15f08c"
+            ]
+        ]
+    },
+    {
+        "id": "6a19c2ebfa15f08c",
+        "type": "http request",
+        "z": "ea443c141c5db8d1",
+        "name": "DockerControl Stop",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 870,
+        "y": 760,
+        "wires": [
+            [
+                "5420de77c3827f85"
+            ]
+        ]
+    },
+    {
+        "id": "5420de77c3827f85",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Copy Video",
+        "func": "msg.url = env.get(\"DOCKER_DESKTOP\") + \"/copy-video\";\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.requestTimeout = 240000;   // ← ADD: SMB reconnect + dual copy can exceed 120s\nnode.warn(\"Copying video to NAS...\");\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1070,
+        "y": 760,
+        "wires": [
+            [
+                "6e7f34c4e1b8b999"
+            ]
+        ]
+    },
+    {
+        "id": "6e7f34c4e1b8b999",
+        "type": "http request",
+        "z": "ea443c141c5db8d1",
+        "name": "Dockercontrol copy",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1270,
+        "y": 760,
+        "wires": [
+            [
+                "6e93f6728aa440f0"
+            ]
+        ]
+    },
+    {
+        "id": "6e93f6728aa440f0",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Check Copy Result",
+        "func": "var result = (msg.payload || \"\").toString().trim();\n\nif (result === \"copied\") {\n    node.warn(\"✅ Video copied to NAS successfully\");\n    return [msg, null];\n}\n\nnode.warn(\"❌ Video copy issue: \" + result);\nmsg.notify = {\n    title: \"Talking Head Video\",\n    message: \"Video copy problem: \" + result\n};\nreturn [msg, msg];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1490,
+        "y": 760,
+        "wires": [
+            [
+                "9bdd1b113be4b353"
+            ],
+            [
+                "9bdd1b113be4b353",
+                "97b3b1431185d0a8"
+            ]
+        ]
+    },
+    {
+        "id": "97b3b1431185d0a8",
+        "type": "api-call-service",
+        "z": "ea443c141c5db8d1",
+        "name": "Notify Copy Failed",
+        "server": "2f3e415f.67836e",
+        "version": 7,
+        "debugenabled": true,
+        "action": "notify.mobile_app_your_phone",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"title\":\"{{notify.title}}\",\"message\":\"{{notify.message}}\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "notify",
+        "service": "mobile_app_your_phone",
+        "x": 1730,
+        "y": 840,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "9bdd1b113be4b353",
+        "type": "debug",
+        "z": "ea443c141c5db8d1",
+        "name": "Containers Stopped",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 1730,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "3f7c1a9b2e4d5061",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Route by TTS Engine",
+        "func": "// Single place that decides which engine gets the text.\n// Output 1 = XTTS v2 (or anything unrecognised)  →  Format for XTTS\n// Output 2 = Voicebox                             →  Format for Voicebox\nvar ttsEngine = global.get('homeassistant.homeAssistant.states[\"input_select.tts_engine\"].state') || \"XTTS v2\";\nmsg.ttsEngine = ttsEngine;\n\nif (ttsEngine === \"Voicebox\") {\n    node.warn(\"Formatting summary for Voicebox\");\n    return [null, msg];\n}\n\nnode.warn(\"Formatting summary for \" + ttsEngine);\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1180,
+        "y": 460,
+        "wires": [
+            [
+                "d22cd4ec8303b774"
+            ],
+            [
+                "15568f26fce2db44"
+            ]
+        ]
+    },
+    {
+        "id": "8b2e6d4c1a95730f",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Format for XTTS",
+        "func": "// XTTS v2 reads punctuation aloud, so trade full stops for line\n// breaks and merge fragments that produce artifacts.\n// Moved here verbatim from Get Daily Summary.\nvar clean = (msg.summary_text || \"\").toString();\n\nclean = clean.replace(/\\.\\.\\.+/g, \"\\n\");\nclean = clean.replace(/\\.\\s*/g, \"\\n\");\n\n// Merge very short lines with the next to avoid XTTS artifacts\nvar lines = clean.split(\"\\n\");\nvar merged = [];\nfor (var i = 0; i < lines.length; i++) {\n    var line = lines[i].trim();\n    if (!line) continue;\n    if (line.length < 20 && i + 1 < lines.length) {\n        lines[i + 1] = line + \", \" + lines[i + 1].trim();\n    } else {\n        merged.push(line);\n    }\n}\nclean = merged.join(\"\\n\");\n\nclean = clean.replace(/[^\\S\\n]+/g, \" \");\nclean = clean.replace(/\\n\\s*/g, \"\\n\");\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\nclean = clean.trim();\n\nmsg.summary_text = clean;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1450,
+        "y": 380,
+        "wires": [
+            [
+                "0166bda06a794a1f"
+            ]
+        ]
+    },
+    {
+        "id": "c4d9e17b53a802f6",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Format for Voicebox",
+        "func": "// Qwen3-TTS / Chatterbox / TADA use terminal punctuation as their\n// main prosodic cue — it is what produces the pause and the pitch\n// drop at the end of a sentence. Keep it, and make sure every line\n// is closed so the model never races into the next clause.\nvar text = (msg.summary_text || \"\").toString();\n\nvar lines = text.split(\"\\n\")\n    .map(function (l) { return l.trim(); })\n    .filter(function (l) { return l.length > 0; })\n    .map(function (l) { return /[.!?;:,]$/.test(l) ? l : l + \".\"; });\n\ntext = lines.join(\" \");\n\n// One space after sentence punctuation, never two.\ntext = text.replace(/([.!?;:,])(?=\\S)/g, \"$1 \")\n           .replace(/[ \\t]{2,}/g, \" \")\n           .trim();\n\nif (!/[.!?]$/.test(text)) { text += \".\"; }\n\nmsg.summary_text = text;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1460,
+        "y": 540,
+        "wires": [
+            [
+                "0166bda06a794a1f"
+            ]
+        ]
+    },
+    {
+        "id": "3057cfc6fe35cc86",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Get Daily Summary",
+        "func": "var summary = global.get('daily_summary_full') || '';\nif (!summary || summary.trim() === '') {\n    node.warn('No daily summary found in global.daily_summary_full');\n    msg.payload = { error: 'No daily summary available. Run the daily summary first.' };\n    return [msg, null];\n}\n\n// Get header from global, reject if it contains undefined\nvar summaryHeader = global.get(\"daily_summary_header\") || null;\nif (summaryHeader && summaryHeader.indexOf(\"undefined\") >= 0) {\n    summaryHeader = null;\n}\n\n// Fallback if no valid header\nif (!summaryHeader) {\n    summaryHeader = \"Summary from midnight to \" +\n        new Date().toLocaleString(\"en-GB\", { timeZone: \"Europe/London\", hour: \"2-digit\", minute: \"2-digit\", hour12: false }) +\n        \" - \" +\n        new Date().toLocaleDateString(\"en-GB\", { timeZone: \"Europe/London\", year: \"numeric\", month: \"2-digit\", day: \"2-digit\" }).split(\"/\").reverse().join(\"-\");\n}\n\nnode.warn('Daily summary retrieved: ' + summary.length + ' chars');\nnode.warn('summaryHeader: ' + summaryHeader);\n\n// ── Strip markdown formatting ──\nvar clean = summary\n    .replace(/^#{1,6}\\s+/gm, \"\")\n    .replace(/\\*\\*(.+?)\\*\\*/g, \"$1\")\n    .replace(/\\*(.+?)\\*/g, \"$1\")\n    .replace(/^[-*+]\\s+/gm, \"\")\n    .replace(/^\\d+\\.\\s+/gm, \"\")\n    .replace(/`(.+?)`/g, \"$1\")\n    .replace(/^---+$/gm, \"\")\n    .replace(/\\n{3,}/g, \"\\n\\n\")\n    .trim();\n\n// ── Remove standalone section headings entirely ──\nclean = clean.replace(/^(Weather|Energy & Car|Energy and Car|Camera Activity|Daily Activity|Tasks, Shopping & Calendar|Tasks, Shopping and Calendar)\\s*$/gm, \"\");\n\n// ── Clean up empty lines left by heading removal ──\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\n\n// ── Date format: 2026-05-17 → 17 May 2026 (MUST run before decimal fix) ──\nclean = clean.replace(/(\\d{4})-(\\d{2})-(\\d{2})/g, function (match, year, month, day) {\n    var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n    return parseInt(day) + \" \" + months[parseInt(month) - 1] + \" \" + year;\n});\n\n// ── Unit & abbreviation replacements (phonetic lowercase for XTTS) ──\nclean = clean.replace(/ETFE/g, \"Ethylene Tetrafluoroethylene\");\nclean = clean.replace(/μSv\\/h/g, \"micro-Sieverts per hour\");\nclean = clean.replace(/&/g, \"and\");\nclean = clean.replace(/°C/g, \" degrees Celsius\");\nclean = clean.replace(/°F/g, \" degrees Fahrenheit\");\nclean = clean.replace(/°/g, \" degrees \");\nclean = clean.replace(/μ/g, \"micro\");\nclean = clean.replace(/kWh/g, \"kilowatt hours\");\nclean = clean.replace(/hPa/g, \"hectopascals\");\nclean = clean.replace(/km\\/h/g, \"kilometres per hour\");\nclean = clean.replace(/\\bmm\\b/g, \" millimetres\");\nclean = clean.replace(/%/g, \" percent\");\nclean = clean.replace(/UV Index/gi, \"you vee index\");\nclean = clean.replace(/🌤️|🌧️|☀️|🌩️/g, \"\");\nclean = clean.replace(/\\bPIR\\b/g, \"motion sensor\");\nclean = clean.replace(/AdBlue/g, \"add blue\");\nclean = clean.replace(/\\bIR\\b/gi, \"infrared\");\nclean = clean.replace(/\\bpoe\\b/gi, \"Power over Ethernet\");\nclean = clean.replace(/ppm/g, \"parts per million\");\nclean = clean.replace(/\\bCO2\\b/g, \"see oh two\");\nclean = clean.replace(/\\bAQI\\b/gi, \"air quality index\");\nclean = clean.replace(/\\bIPTV\\b/gi, \"eye pee tee vee\");\nclean = clean.replace(/\\bLED\\b/g, \"el ee dee\");\nclean = clean.replace(/\\bAC\\b/g, \"air conditioning\");\n\n// ── Replace any remaining slashes ──\nclean = clean.replace(/\\//g, \" and \");\n\n// ── Remove parentheses ──\nclean = clean.replace(/[()]/g, \"\");\n\n// ── Fix times in body text: 17:12 → 5 12 in the afternoon ──\nclean = clean.replace(/\\b(\\d{1,2}):(\\d{2})\\b/g, function (match, h, m) {\n    var hour = parseInt(h);\n    var min = parseInt(m);\n    var period;\n    if (hour >= 5 && hour < 12) period = \"in the morning\";\n    else if (hour >= 12 && hour < 17) period = \"in the afternoon\";\n    else if (hour >= 17 && hour < 21) period = \"in the evening\";\n    else period = \"at night\";\n    if (hour > 12) hour -= 12;\n    if (hour === 0) hour = 12;\n    if (min === 0) return hour + \" \" + period;\n    if (min < 10) return hour + \" oh \" + min + \" \" + period;\n    return hour + \" \" + min + \" \" + period;\n});\n\n// ── Strip trailing .0 from whole numbers: 10.0 → 10 ──\nclean = clean.replace(/\\b(\\d+)\\.0\\b/g, \"$1\");\n\n// ── Convert large minute values to days/hours ──\nclean = clean.replace(/(\\d+)\\s*minutes/g, function (match, num) {\n    var m = parseInt(num);\n    if (m < 120) return match;\n    var days = Math.floor(m / 1440);\n    var hours = Math.floor((m % 1440) / 60);\n    if (days > 0 && hours > 0) return days + \" days and \" + hours + \" hours\";\n    if (days > 0) return days + \" days\";\n    return hours + \" hours\";\n});\n\n// ── Spell out 4+ digit numbers: 1007 → one thousand and seven ──\n// Skip years after month names (e.g. \"May 2026\" stays as-is)\nclean = clean.replace(/\\b(\\d{4,})\\b/g, function (match, num, offset, str) {\n    var before = str.substring(Math.max(0, offset - 12), offset);\n    var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n    if (months.some(function (m) { return before.trimEnd().endsWith(m); })) {\n        return match;\n    }\n    var n = parseInt(num);\n    var thousands = Math.floor(n / 1000);\n    var remainder = n % 1000;\n    if (remainder === 0) return thousands + \" thousand\";\n    if (remainder < 100) return thousands + \" thousand and \" + remainder;\n    return thousands + \" thousand \" + remainder;\n});\n\n// ── Processor/hardware names (AFTER number formatter) ──\nclean = clean.replace(/i9-9900K/g, \"i 9 9900 K\");\nclean = clean.replace(/Ryzen 5950X/g, \"Ryzen 5950 X\");\nclean = clean.replace(/Ultra5/g, \"Ultra 5\");\n\n// ── Fix decimal numbers for TTS: 9.58 → 9 point 58 ──\nclean = clean.replace(/(\\d+)\\.(\\d+)/g, \"$1 point $2\");\n\n// ── Duration abbreviations ──\nclean = clean.replace(/(\\d+)h\\s*(\\d+)m/g, \"$1 hours $2 minutes\");\nclean = clean.replace(/(\\d+)h\\b/g, \"$1 hours\");\nclean = clean.replace(/(\\d+)m\\b/g, \"$1 minutes\");\n\n// ── Fix singular minute/hour ──\nclean = clean.replace(/\\b1 minutes\\b/g, \"1 minute\");\nclean = clean.replace(/\\b1 hours\\b/g, \"1 hour\");\n\n// ── Em-dash → comma pause ──\nclean = clean.replace(/—/g, \", \");\n\n// ── Replace periods with newlines so TTS splits sentences without saying \"dot\" ──\nclean = clean.replace(/\\.\\.\\.+/g, \"\\n\");\nclean = clean.replace(/\\.\\s*/g, \"\\n\");\n\n// ── Merge very short lines with the next line to avoid XTTS artifacts ──\nvar lines = clean.split(\"\\n\");\nvar merged = [];\nfor (var i = 0; i < lines.length; i++) {\n    var line = lines[i].trim();\n    if (!line) continue;\n    if (line.length < 20 && i + 1 < lines.length) {\n        lines[i + 1] = line + \", \" + lines[i + 1].trim();\n    } else {\n        merged.push(line);\n    }\n}\nclean = merged.join(\"\\n\");\n\n// ── Collapse spaces but KEEP newlines for TTS sentence splitting ──\nclean = clean.replace(/[^\\S\\n]+/g, \" \");\nclean = clean.replace(/\\n\\s*/g, \"\\n\");\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\nclean = clean.trim();\n\n// ── Prepend header for TTS ──\nif (summaryHeader) {\n    node.warn(\"summaryHeader before: \" + summaryHeader);\n    summaryHeader = summaryHeader.replace(/(\\d{2}):(\\d{2})/g, function (match, h, m) {\n        var hour = parseInt(h);\n        var min = parseInt(m);\n        node.warn(\"matched: h=\" + hour + \" m=\" + min);\n        if (min === 0) return hour + \" o'clock\";\n        if (min < 10) return hour + \" oh \" + min;\n        return hour + \" \" + min;\n    });\n    node.warn(\"summaryHeader after time: \" + summaryHeader);\n\n    summaryHeader = summaryHeader.replace(/(\\d{4})-(\\d{2})-(\\d{2})/g, function (match, year, month, day) {\n        var months = [\"January\", \"February\", \"March\", \"April\", \"May\", \"June\", \"July\", \"August\", \"September\", \"October\", \"November\", \"December\"];\n        return parseInt(day) + \" \" + months[parseInt(month) - 1] + \" \" + year;\n    });\n    summaryHeader = summaryHeader.replace(\" - \", \", \");\n    clean = summaryHeader + \"\\n\" + clean;\n}\n\nmsg.summary_text = clean;\nmsg.payload = { summary_text: clean };\nreturn [null, msg];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 550,
+        "y": 260,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "e850d58a7883e81e",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Prepare Generate Request",
+        "func": "// Build the request. Engine-specific knobs arrive as msg.ttsParams\n// from whichever Format node ran, so this node stays generic.\n// Precedence on the server: request -> container .env -> default.\nvar ttsEngine = global.get('homeassistant.homeAssistant.states[\"input_select.tts_engine\"].state') || \"XTTS v2\";\n\nmsg.url = 'http://192.168.1.20:5050/generate';\nmsg.method = 'POST';\nmsg.headers = { 'Content-Type': 'application/json' };\n\nmsg.payload = Object.assign({\n    summary_text: msg.summary_text,\n    tts_engine: ttsEngine\n}, msg.ttsParams || {});\n\nmsg.requestTimeout = 600000;\nnode.warn('Calling Ditto TRT server (TTS: ' + ttsEngine + ', params: '\n          + JSON.stringify(msg.ttsParams || {}) + ')...');\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1750,
+        "y": 460,
+        "wires": [
+            [
+                "7245116fde15422f"
+            ]
+        ]
+    },
+    {
+        "id": "d22cd4ec8303b774",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Format for XTTS",
+        "func": "// XTTS v2 reads punctuation aloud, so trade full stops for line\n// breaks and merge fragments that produce artifacts.\n// Moved here verbatim from Get Daily Summary.\nvar clean = (msg.summary_text || \"\").toString();\n\nclean = clean.replace(/\\.\\.\\.+/g, \"\\n\");\nclean = clean.replace(/\\.\\s*/g, \"\\n\");\n\n// Merge very short lines with the next to avoid XTTS artifacts\nvar lines = clean.split(\"\\n\");\nvar merged = [];\nfor (var i = 0; i < lines.length; i++) {\n    var line = lines[i].trim();\n    if (!line) continue;\n    if (line.length < 20 && i + 1 < lines.length) {\n        lines[i + 1] = line + \", \" + lines[i + 1].trim();\n    } else {\n        merged.push(line);\n    }\n}\nclean = merged.join(\"\\n\");\n\nclean = clean.replace(/[^\\S\\n]+/g, \" \");\nclean = clean.replace(/\\n\\s*/g, \"\\n\");\nclean = clean.replace(/\\n{2,}/g, \"\\n\");\nclean = clean.trim();\n\nmsg.summary_text = clean;\n\n// XTTS is the known-good path — no request overrides, so the\n// container's XTTS_TEMPO (1.0) governs and nothing is changed.\nmsg.ttsParams = {};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1450,
+        "y": 340,
+        "wires": [
+            [
+                "e850d58a7883e81e"
+            ]
+        ]
+    },
+    {
+        "id": "15568f26fce2db44",
+        "type": "function",
+        "z": "ea443c141c5db8d1",
+        "name": "Format for Voicebox",
+        "func": "// Qwen3-TTS / Chatterbox / TADA use terminal punctuation as their\n// main prosodic cue — it is what produces the pause and the pitch\n// drop at the end of a sentence. Keep it, and make sure every line\n// is closed so the model never races into the next clause.\nvar text = (msg.summary_text || \"\").toString();\n\nvar lines = text.split(\"\\n\")\n    .map(function (l) { return l.trim(); })\n    .filter(function (l) { return l.length > 0; })\n    .map(function (l) { return /[.!?;:,]$/.test(l) ? l : l + \".\"; });\n\ntext = lines.join(\" \");\n\n// One space after sentence punctuation, never two.\ntext = text.replace(/([.!?;:,])(?=\\S)/g, \"$1 \")\n           .replace(/[ \\t]{2,}/g, \" \")\n           .trim();\n\nif (!/[.!?]$/.test(text)) { text += \".\"; }\n\nmsg.summary_text = text;\n\n// ── Voicebox request parameters ──────────────────────────────────\n// These override the container's .env for this request only.\n// Tune here and Deploy — no container recreate needed.\nmsg.ttsParams = {\n    voicebox_engine: \"tada\",   // \"qwen\" (Base clone) | \"tada\" (Hume TADA 1B)\n    max_chunk_chars: 2000,     // 2000 = whole summary in one continuous pass\n    tempo: 0.86                 // 1.0 = no time-stretch. 0.85 ~= 1:53 video\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1460,
+        "y": 580,
+        "wires": [
+            [
+                "e850d58a7883e81e"
+            ]
+        ]
+    },
+    {
+        "id": "2f3e415f.67836e",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 6,
+        "addon": true,
+        "rejectUnauthorizedCerts": true,
+        "ha_boolean": [
+            "y",
+            "yes",
+            "true",
+            "on",
+            "home",
+            "open"
+        ],
+        "connectionDelay": true,
+        "cacheJson": true,
+        "heartbeat": false,
+        "heartbeatInterval": "30",
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m",
+        "enableGlobalContextStore": true
+    },
+    {
+        "id": "977a3f44c5e9fd19",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-home-assistant-websocket": "0.80.3"
+        }
+    }
+]
