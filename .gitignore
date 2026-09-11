@@ -1,0 +1,18 @@
+# Local secrets
+.env
+
+# Generated videos
+output/
+
+# Avatar / reference images (supply your own server/avatar.jpg)
+*.jpg
+*.jpeg
+*.png
+server/New folder/
+
+# Backups
+*.bak-*
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,43 @@
+services:
+  talking-head:
+    build: .
+    container_name: talking_head_server
+    restart: "no"
+    ports:
+      - "5050:5050"
+    volumes:
+      - C:\docker_desktop\talking-head-ditto\output:/output
+      - ./server/avatar.jpg:/app/avatar.jpg
+      # Live-mount the server so edits need a restart, not a rebuild
+      - ./server/talking_head_server.py:/app/talking_head_server.py
+    environment:
+      - HA_URL=${HA_URL}
+      - HA_TOKEN=${HA_TOKEN}
+      - HA_NOTIFY_SERVICE=${HA_NOTIFY_SERVICE}
+      - AVATAR_PATH=/app/avatar.jpg
+      - OUTPUT_DIR=/output
+      - TTS_VOICE=${TTS_VOICE:-en-GB-RyanNeural}
+      - DITTO_DIR=/app/ditto
+      - XTTS_URL=${XTTS_URL:-http://localhost:5051}
+      - TZ=Europe/London
+      - XTTS_TEMPO=${XTTS_TEMPO:-1.0}
+      - VOICEBOX_TEMPO=${VOICEBOX_TEMPO:-1.0}
+      - VOICEBOX_URL=${VOICEBOX_URL:-http://localhost:17493}
+      - VOICEBOX_PROFILE=${VOICEBOX_PROFILE:-Keira}
+      - VOICEBOX_ENGINE=${VOICEBOX_ENGINE:-qwen}
+      - VOICEBOX_MAX_CHUNK=${VOICEBOX_MAX_CHUNK:-800}
+    env_file:
+      - .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
