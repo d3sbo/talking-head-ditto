@@ -50,7 +50,7 @@ The image build clones Ditto and downloads its checkpoints from Hugging Face, so
 | `watch-and-copy.ps1` | Older Windows helper that polls for new videos and copies them to a NAS share (superseded by `docker-control.ps1`) |
 | `windows/docker-control.ps1` | Tiny HTTP listener on the Docker host that Node-RED calls to start/stop containers and copy the finished video to Home Assistant |
 | `tts-server/` | XTTS v2 voice-cloning server used as one of the two TTS engines |
-| `home-assistant/` | Dashboard view, helper and video player page |
+| `home-assistant/` | Node-RED flow, dashboard view, helper and video player page |
 | `body.json` | Example request payload |
 
 ## Home Assistant and Node-RED
@@ -64,6 +64,7 @@ The whole run is driven from Home Assistant:
 
 ### Home Assistant setup
 
+- **Node-RED flow:** import `home-assistant/node-red/talking-head-flow.json` (Menu > Import). Then set the `DOCKER_DESKTOP` environment variable (see below), change `192.168.1.20` in *Check Ditto Health* and *Prepare Generate Request* to your GPU host, and change `notify.mobile_app_your_phone` in *Notify Copy Failed* to your phone. It reads the summary from the global `daily_summary_full` (and optional `daily_summary_header`), so any flow that sets that will work. A few older, disconnected nodes are kept in the tab for reference.
 - **Helper:** `home-assistant/helpers.yaml` creates `input_select.tts_engine` (XTTS v2 or Voicebox), which the flow reads to choose the engine.
 - **Video player:** copy `home-assistant/www/Ai-Assistant/player.html` to `<config>/www/Ai-Assistant/player.html`. It always loads the newest `summary.mp4`.
 - **Dashboard:** `home-assistant/dashboard-ai-assistant.yaml` is a view with the video and the engine picker.
