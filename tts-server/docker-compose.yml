@@ -1,0 +1,24 @@
+services:
+  tts-server:
+    build: .
+    container_name: tts_server
+    restart: "no"
+    ports:
+      - "5051:5051"
+    volumes:
+      - C:\docker_desktop\tts-server\voice:/voice
+    environment:
+      - VOICE_SAMPLE=/voice/sample.wav
+      - LANGUAGE=en
+      - PORT=5051
+      - COQUI_TOS_AGREED=1
+      - TZ=Europe/London
+      - SILENCE_MS=400
+      - TRIM_TAIL_MS=200
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
