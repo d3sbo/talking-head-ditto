@@ -47,5 +47,38 @@ The image build clones Ditto and downloads its checkpoints from Hugging Face, so
 | `server/talking_head_server.py` | The live server (TensorRT + XTTS/Voicebox) |
 | `server/talking_head_server_PyTorch .py` | Older PyTorch-backend version, kept for reference |
 | `talking_head_server.py` | Earlier single-engine version, kept for reference |
-| `watch-and-copy.ps1` | Windows helper that copies new videos to a NAS share for Home Assistant |
+| `watch-and-copy.ps1` | Older Windows helper that polls for new videos and copies them to a NAS share (superseded by `docker-control.ps1`) |
+| `windows/docker-control.ps1` | Tiny HTTP listener on the Docker host that Node-RED calls to start/stop containers and copy the finished video to Home Assistant |
+| `tts-server/` | XTTS v2 voice-cloning server used as one of the two TTS engines |
+| `home-assistant/` | Dashboard view, helper and video player page |
 | `body.json` | Example request payload |
+
+## Home Assistant and Node-RED
+
+The whole run is driven from Home Assistant:
+
+1. Something fires the Home Assistant event `generate_talking_head_video` (an automation, a button, or the daily summary flow).
+2. The Node-RED flow reads the summary text, rewrites it so it reads well aloud (dates, units, times, abbreviations) and formats it for the chosen engine.
+3. It calls `docker-control.ps1` to start the containers for that engine, polls `/health` until the server is ready (up to 36 tries), then POSTs to `/generate`.
+4. When the video is done it asks `docker-control.ps1` to copy it into Home Assistant (`www/Ai-Assistant/summary.mp4` plus the media folder) and stop the containers. You get a phone notification if the copy fails.
+
+### Home Assistant setup
+
+- **Helper:** `home-assistant/helpers.yaml` creates `input_select.tts_engine` (XTTS v2 or Voicebox), which the flow reads to choose the engine.
+- **Video player:** copy `home-assistant/www/Ai-Assistant/player.html` to `<config>/www/Ai-Assistant/player.html`. It always loads the newest `summary.mp4`.
+- **Dashboard:** `home-assistant/dashboard-ai-assistant.yaml` is a view with the video and the engine picker.
+
+### docker-control.ps1
+
+Runs on the Windows Docker host and listens on port 2376. Node-RED reaches it through an environment variable `DOCKER_DESKTOP` (for example `http://192.168.1.20:2376`) set in the Node-RED add-on.
+
+| Path | Does |
+|---|---|
+| `/start-ditto`, `/stop-ditto` | Start/stop `tts_server` + `talking_head_server` (XTTS engine) |
+| `/start-ditto-voicebox`, `/stop-ditto-voicebox` | Start/stop `voicebox` + `talking_head_server` |
+| `/start-birdwatch`, `/stop-birdwatch` | Start/stop the BirdWatch container |
+| `/copy-video` | Copy the newest video to the Home Assistant `config` and `media` Samba shares |
+
+It reads Samba credentials from `C:\docker_desktop\nas-cred.txt` (line 1 user, line 2 password). Keep that file out of git.
+
+Run it as a scheduled task at logon. After editing the script, restart the task (stop the task, end the PowerShell process, start the task), because the old listener keeps port 2376 until it exits. Its replies only confirm the listener received the request, so check `docker ps` to see whether a container actually started.
