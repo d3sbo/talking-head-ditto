@@ -1,0 +1,10 @@
+# Helper used by the Node-RED flow to pick the voice engine.
+# Add to configuration.yaml, or create it in the UI:
+# Settings > Devices & services > Helpers > Create helper > Dropdown
+input_select:
+  tts_engine:
+    name: TTS Engine
+    icon: mdi:chat
+    options:
+      - XTTS v2
+      - Voicebox

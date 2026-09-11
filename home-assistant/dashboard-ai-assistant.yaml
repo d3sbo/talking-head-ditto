@@ -1,0 +1,28 @@
+# Dashboard view: plays the latest talking-head video and lets you pick the TTS engine.
+# Paste into a dashboard's raw configuration editor under `views:`.
+#
+# The video card loads /local/Ai-Assistant/player.html, i.e. the file
+# home-assistant/www/Ai-Assistant/player.html copied to <config>/www/Ai-Assistant/.
+# docker-control.ps1 (/copy-video) drops each new video there as summary.mp4.
+type: sections
+title: Ai Assistant
+path: ai-assistant
+max_columns: 4
+sections:
+  - type: grid
+    column_span: 4
+    cards:
+      - type: iframe
+        url: /local/Ai-Assistant/player.html
+        aspect_ratio: 56%
+        grid_options:
+          columns: full
+          rows: 10
+  - type: grid
+    cards:
+      - type: heading
+        heading: Voice
+      - type: tile
+        entity: input_select.tts_engine
+        features:
+          - type: select-options
