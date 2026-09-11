@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; background: black; }
+  video { width: 100%; height: 100vh; display: block; }
+</style>
+</head>
+<body>
+<video controls playsinline id="v"></video>
+<script>
+  // Cache-bust so the dashboard always loads the newest summary.mp4
+  document.getElementById('v').src = '/local/Ai-Assistant/summary.mp4?t=' + Date.now();
+</script>
+</body>
+</html>
